@@ -5,7 +5,7 @@ EAPI=8
 
 DESCRIPTION="Security monitoring system: Suricata IDS + ModSecurity WAF + Fail2Ban + iptables dashboard"
 HOMEPAGE="https://github.com/denjik/suritop-web"
-SRC_URI="https://github.com/PEAKT0P/suritop-web-gentoo/raw/main/suritop-web-overlay.tar.gz -> ${P}.tar.gz"
+SRC_URI=""
 
 LICENSE="GPL-3"
 SLOT="0"
@@ -36,7 +36,8 @@ pkg_setup() {
 }
 
 src_unpack() {
-	default
+	mkdir -p "${S}"
+	cp -r "${FILESDIR}/"* "${S}/" 2>/dev/null || true
 }
 
 src_install() {
