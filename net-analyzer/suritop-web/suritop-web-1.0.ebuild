@@ -21,7 +21,7 @@ RDEPEND="
 	www-servers/nginx
 	sys-apps/shadow
 	sys-apps/coreutils
-	geoip? ( dev-libs/GeoIP )
+	geoip? ( dev-libs/geoip )
 "
 BDEPEND="
 	sys-apps/shadow

@@ -30,5 +30,5 @@ define("RT_FETCH_LIMIT", 50);
 define("STATS_REFRESH_INTERVAL", 30000);
 define("CHARTS_REFRESH_INTERVAL", 120000);
 define("DEFAULT_THEME", "dark");
-define("ATTACKMAP_BASE_URL", "/suritop/attackmap/");
-define("WAF_BASE_URL", "/suritop/admin_stats.php");
+define("ATTACKMAP_BASE_URL", "/attackmap/");
+define("WAF_BASE_URL", "/admin_stats.php");
