@@ -112,6 +112,7 @@ src_install() {
 	newinitd "${S}"/suritop-stats.initd suritop-stats
 	newinitd "${S}"/suritop-suri.initd suritop-suri
 	newinitd "${S}"/suritop-waf.initd suritop-waf
+	newinitd "${S}"/suritop-geo.initd suritop-geo
 	newinitd "${S}"/suritop-iptables.initd suritop-iptables
 
 	if use iptables; then

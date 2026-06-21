@@ -10,9 +10,12 @@ geo_fill.py v2.1 — Заполняет таблицу geo_cache (Gentoo Edition
 Никаких pip-модулей. Никаких долгих зависаний при 429 ошибке.
 """
 
-sys.path.insert(0, '/usr/libexec/suritop-web')
-from suritop_config import get_db, get_config
 import sys
+sys.path.insert(0, '/opt/stats_collector')
+from suritop_config import get_db, get_config
+
+
+
 import time
 import json
 import subprocess
@@ -174,11 +177,9 @@ def fill_missing(conn):
         if insert_data:
             try:
                 cur.executemany(
-                    """INSERT INTO geo_cache (ip, lat, lon, country)
-                       VALUES (%s, %s, %s, %s)
-                       ON DUPLICATE KEY UPDATE lat=VALUES(lat), lon=VALUES(lon),
-                       country=VALUES(country), updated_at=NOW()""",
-                    insert_data
+                    """REPLACE INTO geo_cache (ip, lat, lon, country)
+                       VALUES (%s, %s, %s, %s)""",
+                       insert_data,
                 )
                 conn.commit()
                 filled += len(insert_data)

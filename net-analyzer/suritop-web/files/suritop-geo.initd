@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+# suritop-geo — GeoIP cache filler daemon
+
+name="suritop-geo"
+description="GeoIP cache filler (fills geo_cache from attack tables)"
+
+command="/usr/bin/python3"
+command_args="/opt/stats_collector/geo_fill.py --daemon"
+command_background="yes"
+command_user="stats_collector:stats_collector"
+
+pidfile="/run/suritop-web/geo_fill.pid"
+start_stop_daemon_args="--make-pidfile --stdout /var/log/geo_fill.log --stderr /var/log/geo_fill.log"
+
+depend() {
+    need net mysql
+    after suritop-stats
+    keyword --timeout 60
+}
+
+start_pre() {
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /run/suritop-web
+    checkpath --file --owner stats_collector:stats_collector --mode 0644 /var/log/geo_fill.log 2>/dev/null || true
+}
