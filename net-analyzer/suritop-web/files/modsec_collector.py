@@ -97,6 +97,7 @@ def parse_audit_entries(lines):
     current_section = None
 
     for line in lines:
+        line = line.rstrip('\n\r')
         if line.startswith('---') and line.endswith('--'):
             parts = line.strip('-').strip()
             if len(parts) >= 2:
