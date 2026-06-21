@@ -1,0 +1,241 @@
+#!/sbin/openrc-run
+# suritop-iptables-setup — iptables firewall based on iptables_ok.sh
+# Reads /etc/conf.d/suritop-web for configuration
+# WARNING: This REPLACES all existing iptables rules!
+
+name="suritop-iptables-setup"
+description="iptables firewall with Suricata IPS integration"
+
+depend() {
+    need net
+    before suricata fail2ban
+    keyword --timeout 30
+}
+
+start() {
+    ebegin "Applying iptables firewall rules"
+
+    # ── Check if auto-setup is enabled ──
+    [ -f /etc/conf.d/suritop-web ] && . /etc/conf.d/suritop-web
+
+    if [ "${SURITOP_AUTO_IPTABLES}" != "yes" ]; then
+        einfo "iptables auto-setup disabled (SURITOP_AUTO_IPTABLES=no)"
+        einfo "Skipping — your existing rules are preserved"
+        eend 0
+        return 0
+    fi
+
+    # ── Source config ──
+    NET_IF="${SURITOP_NET_INTERFACE:-eth0}"
+    SSH_PORT="${SURITOP_SSH_PORT:-22}"
+    SERVER_IP="${SURITOP_SERVER_IP:-127.0.0.1}"
+    WHITELIST_IP="${SURITOP_WHITELIST_IP:-${SERVER_IP}}"
+    NAT_ENABLE="${SURITOP_NAT_ENABLE:-no}"
+    DOCKER_ENABLE="${SURITOP_DOCKER_ENABLE:-no}"
+    DOCKER_BRIDGE="${SURITOP_DOCKER_BRIDGE:-172.17.0.0/16}"
+
+    einfo "Interface: $NET_IF, SSH: $SSH_PORT, NAT: $NAT_ENABLE, Docker: $DOCKER_ENABLE"
+
+    # ==========================================
+    # 1. ОЧИСТКА (IPv4 + IPv6)
+    # ==========================================
+    iptables -F
+    iptables -X
+    iptables -t nat -F
+    iptables -t nat -X
+    iptables -t mangle -F
+    iptables -t mangle -X
+
+    ip6tables -F 2>/dev/null
+    ip6tables -X 2>/dev/null
+    ip6tables -t mangle -F 2>/dev/null
+    ip6tables -t mangle -X 2>/dev/null
+
+    # ==========================================
+    # 2. ПОЛИТИКИ ПО УМОЛЧАНИЮ
+    # ==========================================
+    iptables -P INPUT DROP
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+
+    ip6tables -P INPUT DROP 2>/dev/null
+    ip6tables -P FORWARD ACCEPT 2>/dev/null
+    ip6tables -P OUTPUT ACCEPT 2>/dev/null
+
+    # ==========================================
+    # 3. IPv6 — БАЗОВЫЙ
+    # ==========================================
+    ip6tables -A INPUT -i lo -j ACCEPT 2>/dev/null
+    ip6tables -A OUTPUT -o lo -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p ipv6-icmp -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p tcp --dport $SSH_PORT -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p udp --dport 30814:30821 -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p tcp --dport 30814:30821 -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p udp --dport 3478 -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p tcp --dport 3478 -j ACCEPT 2>/dev/null
+    ip6tables -A INPUT -p tcp --dport 5349 -j ACCEPT 2>/dev/null
+
+    # ==========================================
+    # 4. WHITELIST — ВСЕГДА ПЕРВЫМ
+    # ==========================================
+    for ip in $WHITELIST_IP; do
+        iptables -A INPUT -s $ip -j ACCEPT
+    done
+
+    # ==========================================
+    # 5. ESTABLISHED/RELATED ТОЛЬКО ДЛЯ ЛОКАЛКИ
+    #    (Suricata видит весь внешний трафик!)
+    # ==========================================
+    iptables -A INPUT -i lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    iptables -A INPUT -i docker0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null
+    iptables -A INPUT -i br-+ -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+    # ==========================================
+    # 6. LOOPBACK
+    # ==========================================
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+
+    # ==========================================
+    # 7. ЗАЩИТА ОТ СКАНИРОВАНИЯ
+    # ==========================================
+    iptables -A INPUT -p tcp --tcp-flags ALL NONE -j DROP
+    iptables -A INPUT -p tcp --tcp-flags ALL ALL -j DROP
+
+    # ==========================================
+    # 8. SYN_FLOOD CHECK
+    # ==========================================
+    iptables -N SYN_CHECK 2>/dev/null
+    # Не включаем автоматически — может ломать соединения
+    # iptables -A INPUT -p tcp --syn -j SYN_CHECK
+    iptables -A SYN_CHECK -m limit --limit 1/second --limit-burst 3 -j RETURN
+    iptables -A SYN_CHECK -j DROP
+
+    # ==========================================
+    # 9. UDP_FLOOD CHECK (исключаем игровые порты)
+    # ==========================================
+    iptables -N UDP_CHECK 2>/dev/null
+    iptables -A INPUT -p udp ! --dport 30814:30821 -j UDP_CHECK
+    iptables -A UDP_CHECK -m limit --limit 10/second -j RETURN
+    iptables -A UDP_CHECK -j DROP
+
+    # ==========================================
+    # 10. БЛОКИРОВКА DNS-АТАК ПО СИГНАТУРЕ
+    # ==========================================
+    iptables -A INPUT -i $NET_IF -p udp --dport 53 -m string --algo bm --hex-string "|00000000000000000000ffff|" --from 40 -j DROP
+
+    # ==========================================
+    # 11. ICMP ИЗ ИНТЕРНЕТА
+    # ==========================================
+    iptables -A INPUT -i $NET_IF -p icmp --icmp-type echo-request -j DROP
+
+    # ==========================================
+    # 12. БЛОКИРОВКА VNC 5900 ИЗ ИНТЕРНЕТА
+    # ==========================================
+    iptables -A INPUT -i $NET_IF -p tcp --dport 5900 -j DROP
+
+    # ==========================================
+    # 13. SSH ANTI-BRUTE-FORCE (recent module)
+    # ==========================================
+    iptables -A INPUT -p tcp --dport $SSH_PORT -m conntrack --ctstate NEW -m recent --name ssh_brute --set
+    iptables -A INPUT -p tcp --dport $SSH_PORT -m conntrack --ctstate NEW -m recent --name ssh_brute --update --seconds 60 --hitcount 8 -j DROP
+    iptables -A INPUT -p tcp --dport $SSH_PORT -j ACCEPT
+    iptables -A OUTPUT -p tcp --sport $SSH_PORT -j ACCEPT
+
+    # ==========================================
+    # 14. LOКАЛКА br0 — ВЕСЬ ТРАФИК
+    # ==========================================
+    iptables -A INPUT -i br0 -j ACCEPT
+    iptables -A INPUT -i br0 -p udp --dport 67:68 --sport 67:68 -j ACCEPT
+
+    # ==========================================
+    # 15. DOCKER/BRIDGE — ВСТАВЛЯЕМ В САМЫЙ ВЕРХ
+    # ==========================================
+    if [ "$DOCKER_ENABLE" = "yes" ]; then
+        iptables -I INPUT 1 -i docker0 -j ACCEPT
+        iptables -I INPUT 2 -s $DOCKER_BRIDGE -j ACCEPT
+        # Дополнительные Docker сети
+        iptables -I INPUT 3 -s 172.18.0.0/16 -j ACCEPT 2>/dev/null
+        iptables -I INPUT 4 -s 172.19.0.0/16 -j ACCEPT 2>/dev/null
+    fi
+
+    # ==========================================
+    # 16. NFQUEUE -> SURICATA IPS
+    #    (Очищенный трафик уходит в Suricata)
+    # ==========================================
+    iptables -A INPUT -i $NET_IF -j NFQUEUE --queue-num 0 --queue-bypass
+    iptables -A OUTPUT -o $NET_IF -j NFQUEUE --queue-num 0 --queue-bypass
+    iptables -A FORWARD -i $NET_IF -j NFQUEUE --queue-num 0 --queue-bypass
+    iptables -A FORWARD -o $NET_IF -j NFQUEUE --queue-num 0 --queue-bypass
+
+    # ==========================================
+    # 17. HTTP/HTTPS + СЕРВИСЫ
+    #    (Suricata уже видит этот трафик через NFQUEUE)
+    # ==========================================
+    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+    iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+    iptables -A INPUT -p udp --dport 30814:30821 -j ACCEPT
+    iptables -A INPUT -p tcp --dport 30814:30821 -j ACCEPT
+
+    # ==========================================
+    # 18. DOCKER FORWARD
+    # ==========================================
+    if [ "$DOCKER_ENABLE" = "yes" ]; then
+        iptables -A FORWARD -i docker0 -j ACCEPT
+        iptables -A FORWARD -o docker0 -j ACCEPT
+        iptables -A FORWARD -i br-+ -j ACCEPT
+        iptables -A FORWARD -o br-+ -j ACCEPT
+    fi
+
+    iptables -A FORWARD -i $NET_IF ! -o $NET_IF -j ACCEPT
+
+    # ==========================================
+    # 19. LOG ДРОПНУТЫХ (в конце INPUT)
+    # ==========================================
+    iptables -A INPUT -i $NET_IF -m limit --limit 5/min -j LOG --log-prefix "IPT-DROP: " --log-level 4
+
+    # ==========================================
+    # 20. DOCKER-USER ИЗОЛЯЦИЯ
+    # ==========================================
+    if [ "$DOCKER_ENABLE" = "yes" ] && iptables -w -L DOCKER-USER -n &>/dev/null; then
+        iptables -w -F DOCKER-USER
+        for port in 23 135 139 445 6379 11211 33060 5900 8080 3000 3389; do
+            iptables -w -A DOCKER-USER -i $NET_IF -p tcp --dport $port -j DROP
+            iptables -w -A DOCKER-USER -i $NET_IF -p udp --dport $port -j DROP
+        done
+        iptables -w -A DOCKER-USER -j RETURN
+    fi
+
+    # ==========================================
+    # 21. NAT / MASQUERADE
+    # ==========================================
+    if [ "$NAT_ENABLE" = "yes" ]; then
+        iptables -t nat -A POSTROUTING -o $NET_IF -j MASQUERADE
+    fi
+
+    # ==========================================
+    # 22. MSS CLAMPING (MTU fix для VPN/NAT)
+    # ==========================================
+    iptables -t mangle -A POSTROUTING -o $NET_IF -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+
+    eend $?
+}
+
+stop() {
+    ebegin "Flushing iptables rules"
+    iptables -F
+    iptables -X
+    iptables -t nat -F
+    iptables -t nat -X
+    iptables -t mangle -F
+    iptables -t mangle -X
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    ip6tables -F 2>/dev/null
+    ip6tables -P INPUT ACCEPT 2>/dev/null
+    ip6tables -P FORWARD ACCEPT 2>/dev/null
+    ip6tables -P OUTPUT ACCEPT 2>/dev/null
+    eend $?
+}

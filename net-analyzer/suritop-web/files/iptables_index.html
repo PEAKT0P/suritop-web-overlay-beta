@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🔒 Firewall Manager — denjik</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+        :root {
+            --bg: #0a0e14;
+            --bg2: #111820;
+            --bg3: #1a2230;
+            --border: #1e2a3a;
+            --text: #c5cdd8;
+            --text-dim: #6b7a8d;
+            --text-bright: #e8ecf1;
+            --accent: #00d4aa;
+            --accent-dim: #00d4aa33;
+            --red: #ff4757;
+            --red-dim: #ff475722;
+            --orange: #ff9f43;
+            --orange-dim: #ff9f4322;
+            --blue: #3498ff;
+            --blue-dim: #3498ff22;
+            --green: #2ed573;
+            --green-dim: #2ed57322;
+            --yellow: #ffd32a;
+            --radius: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── Шапка ─── */
+        .header {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+        }
+
+        .header-host {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            background: var(--bg3);
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .status-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .status-dot.error { background: var(--red); }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ─── Табы ─── */
+        .tabs {
+            display: flex;
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tabs::-webkit-scrollbar { display: none; }
+
+        .tab {
+            padding: 10px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* ─── Контент ─── */
+        .content {
+            padding: 12px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* ─── Карточки ─── */
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .card-header .badge {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge-green { background: var(--green-dim); color: var(--green); }
+        .badge-red { background: var(--red-dim); color: var(--red); }
+        .badge-orange { background: var(--orange-dim); color: var(--orange); }
+        .badge-blue { background: var(--blue-dim); color: var(--blue); }
+
+        .card-body { padding: 10px 14px; }
+
+        /* ─── Системные метрики ─── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+        }
+
+        .metric {
+            background: var(--bg3);
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        /* ─── Таблица портов ─── */
+        .port-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .port-table th {
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--bg2);
+        }
+
+        .port-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            vertical-align: middle;
+        }
+
+        .port-table tr:last-child td { border-bottom: none; }
+
+        .port-table tr:hover { background: var(--bg3); }
+
+        .fw-open {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        .fw-blocked, .fw-blocked_by_policy {
+            color: var(--green);
+        }
+
+        .fw-limited {
+            color: var(--orange);
+        }
+
+        /* ─── Правила iptables ─── */
+        .chain-block {
+            margin-bottom: 12px;
+        }
+
+        .chain-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent);
+            padding: 8px 12px;
+            background: var(--bg3);
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chain-policy {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .policy-drop { background: var(--red-dim); color: var(--red); }
+        .policy-accept { background: var(--green-dim); color: var(--green); }
+
+        .rules-list {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .rule-row {
+            display: flex;
+            align-items: center;
+            padding: 5px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            border-bottom: 1px solid var(--border);
+            gap: 8px;
+        }
+
+        .rule-row:last-child { border-bottom: none; }
+        .rule-row:hover { background: var(--bg2); }
+
+        .rule-num {
+            color: var(--text-dim);
+            min-width: 24px;
+            text-align: right;
+        }
+
+        .rule-target {
+            min-width: 70px;
+            font-weight: 600;
+        }
+
+        .target-accept { color: var(--green); }
+        .target-drop { color: var(--red); }
+        .target-reject { color: var(--red); }
+        .target-log { color: var(--yellow); }
+        .target-masquerade { color: var(--blue); }
+        .target-dnat { color: var(--orange); }
+        .target-return { color: var(--text-dim); }
+
+        .rule-details {
+            color: var(--text-dim);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rule-pkts {
+            color: var(--text-dim);
+            font-size: 10px;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        /* ─── Docker ─── */
+        .container-card {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
+        }
+
+        .container-card:last-child { border-bottom: none; }
+
+        .container-status {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .container-status.up { background: var(--green); }
+        .container-status.down { background: var(--red); }
+
+        .container-info { flex: 1; min-width: 0; }
+
+        .container-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-bright);
+        }
+
+        .container-meta {
+            font-size: 11px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ─── Fail2ban ─── */
+        .jail-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .jail-card:last-child { border-bottom: none; }
+
+        .jail-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .jail-stats { display: flex; gap: 12px; }
+
+        .jail-stat {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        /* ─── Действия ─── */
+        .action-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .action-input {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-bright);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            width: 100%;
+            max-width: 200px;
+        }
+
+        .action-input:focus {
+            border-color: var(--accent);
+        }
+
+        .action-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .action-select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-bright);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'IBM Plex Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        .btn-accent:hover { filter: brightness(1.15); }
+        .btn-accent:active { transform: scale(0.97); }
+
+        .btn-red {
+            background: var(--red);
+            color: #fff;
+        }
+        .btn-red:hover { filter: brightness(1.15); }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-outline:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ─── Toast ─── */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.3s ease;
+            max-width: 90vw;
+            text-align: center;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { border-color: var(--green); color: var(--green); }
+        .toast.error { border-color: var(--red); color: var(--red); }
+
+        /* ─── Spinner ─── */
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-overlay {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 10px;
+            color: var(--text-dim);
+            font-size: 13px;
+        }
+
+        /* ─── Connections ─── */
+        .conn-row {
+            display: flex;
+            padding: 4px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
+        }
+
+        .conn-row:hover { background: var(--bg3); }
+
+        .conn-local { color: var(--blue); min-width: 45%; }
+        .conn-arrow { color: var(--text-dim); }
+        .conn-remote { color: var(--orange); }
+
+        /* ─── Suricata alerts ─── */
+        .alert-line {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 4px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-dim);
+            word-break: break-all;
+        }
+
+        .alert-line:hover { background: var(--bg3); color: var(--text); }
+
+        /* ─── Адаптивность ─── */
+        @media (max-width: 600px) {
+            .content { padding: 8px; }
+            .card-body { padding: 8px 10px; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .port-table { font-size: 11px; }
+            .port-table th, .port-table td { padding: 5px 6px; }
+            .rule-row { font-size: 10px; padding: 4px 8px; }
+            .rule-details { max-width: 140px; }
+            .action-input { max-width: 100%; }
+            .action-form { flex-direction: column; }
+            .action-form .btn { width: 100%; }
+            .header-host { display: none; }
+        }
+
+        /* ─── Scrollbar ─── */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+        /* ─── Анимации ─── */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card { animation: fadeIn 0.3s ease forwards; }
+        .card:nth-child(2) { animation-delay: 0.05s; }
+        .card:nth-child(3) { animation-delay: 0.1s; }
+        .card:nth-child(4) { animation-delay: 0.15s; }
+
+        /* ─── Refresh button ─── */
+        .btn-refresh {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .btn-refresh:hover { color: var(--accent); }
+        .btn-refresh.spinning svg { animation: spin 0.8s linear infinite; }
+
+        /* ─── Filter input ─── */
+        .filter-bar {
+            padding: 8px 0;
+        }
+
+        .filter-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .filter-input:focus { border-color: var(--accent); }
+
+        /* ─── port security indicator ─── */
+        .port-indicator {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+
+        .port-indicator.safe { background: var(--green); }
+        .port-indicator.danger { background: var(--red); }
+        .port-indicator.warn { background: var(--orange); }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-left">
+        <span class="header-logo">⛨ FW Manager</span>
+        <span class="header-host" id="hostname">loading...</span>
+    </div>
+    <div class="header-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">connecting</span>
+        <button class="btn-refresh" onclick="refreshData()" id="refreshBtn" title="Обновить">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <div class="tab active" data-panel="overview">Обзор</div>
+    <div class="tab" data-panel="ports">Порты</div>
+    <div class="tab" data-panel="rules">Правила</div>
+    <div class="tab" data-panel="nat">NAT</div>
+    <div class="tab" data-panel="docker">Docker</div>
+    <div class="tab" data-panel="security">Защита</div>
+    <div class="tab" data-panel="actions">Управление</div>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+    <!-- ═══ Обзор ═══ -->
+    <div class="panel active" id="panel-overview">
+        <div class="card">
+            <div class="card-header">Система</div>
+            <div class="card-body">
+                <div class="metrics-grid" id="sysMetrics">
+                    <div class="loading-overlay"><div class="spinner"></div> загрузка...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Сетевые интерфейсы
+            </div>
+            <div class="card-body" id="interfaces">
+                <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Активные соединения
+                <span class="badge badge-blue" id="connCount">0</span>
+            </div>
+            <div class="card-body" id="connections" style="max-height:250px;overflow-y:auto;padding:0">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Порты ═══ -->
+    <div class="panel" id="panel-ports">
+        <div class="card">
+            <div class="card-header">
+                Слушающие порты — статус файрвола
+                <span class="badge badge-blue" id="portCount">0</span>
+            </div>
+            <div class="filter-bar" style="padding:8px 14px 0">
+                <input type="text" class="filter-input" id="portFilter" placeholder="Фильтр: порт, процесс, статус...">
+            </div>
+            <div class="card-body" style="padding:0;overflow-x:auto">
+                <table class="port-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Порт</th>
+                            <th>Proto</th>
+                            <th>Bind</th>
+                            <th>Процесс</th>
+                            <th>FW External</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Правила ═══ -->
+    <div class="panel" id="panel-rules">
+        <div class="card">
+            <div class="card-header">
+                iptables — filter
+                <div style="display:flex;gap:6px">
+                    <span class="badge badge-green" id="acceptCount">0 ACCEPT</span>
+                    <span class="badge badge-red" id="dropCount">0 DROP</span>
+                </div>
+            </div>
+            <div class="card-body" id="filterRules" style="padding:6px">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ NAT ═══ -->
+    <div class="panel" id="panel-nat">
+        <div class="card">
+            <div class="card-header">iptables — NAT / Port Forwarding</div>
+            <div class="card-body" id="natRules" style="padding:6px">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">iptables — FORWARD</div>
+            <div class="card-body" id="forwardRules" style="padding:6px">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Docker ═══ -->
+    <div class="panel" id="panel-docker">
+        <div class="card">
+            <div class="card-header">
+                Docker контейнеры
+                <span class="badge badge-blue" id="dockerCount">0</span>
+            </div>
+            <div class="card-body" id="dockerContainers" style="padding:0">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Docker сети</div>
+            <div class="card-body" id="dockerNetworks">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Защита ═══ -->
+    <div class="panel" id="panel-security">
+        <div class="card">
+            <div class="card-header">
+                Fail2ban — Jails
+            </div>
+            <div class="card-body" id="fail2banJails" style="padding:0">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Suricata IDS
+                <span class="badge" id="suricataStatus">—</span>
+            </div>
+            <div class="card-body" id="suricataAlerts" style="padding:0;max-height:300px;overflow-y:auto">
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Управление ═══ -->
+    <div class="panel" id="panel-actions">
+        <div class="card">
+            <div class="card-header">⚡ Заблокировать IP</div>
+            <div class="card-body">
+                <div class="action-form">
+                    <input type="text" class="action-input" id="blockIpInput" placeholder="192.168.1.1" pattern="[\d.\/]+">
+                    <button class="btn btn-red" onclick="doAction('block_ip', {ip: document.getElementById('blockIpInput').value})">Заблокировать</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">🔓 Разблокировать IP</div>
+            <div class="card-body">
+                <div class="action-form">
+                    <input type="text" class="action-input" id="unblockIpInput" placeholder="192.168.1.1">
+                    <button class="btn btn-accent" onclick="doAction('unblock_ip', {ip: document.getElementById('unblockIpInput').value})">Разблокировать</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">🔌 Открыть порт</div>
+            <div class="card-body">
+                <div class="action-form">
+                    <input type="number" class="action-input" id="openPortInput" placeholder="8443" min="1" max="65535">
+                    <select class="action-select" id="openPortProto">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                    </select>
+                    <button class="btn btn-accent" onclick="doAction('open_port', {port: document.getElementById('openPortInput').value, proto: document.getElementById('openPortProto').value})">Открыть</button>
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">
+                    ⚠ Опасные порты (22,53,139,445,3306,3389,5900,6379...) заблокированы навсегда
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">🚫 Закрыть порт</div>
+            <div class="card-body">
+                <div class="action-form">
+                    <input type="number" class="action-input" id="closePortInput" placeholder="8443" min="1" max="65535">
+                    <select class="action-select" id="closePortProto">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                    </select>
+                    <button class="btn btn-red" onclick="doAction('close_port', {port: document.getElementById('closePortInput').value, proto: document.getElementById('closePortProto').value})">Закрыть</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">📋 Лог действий</div>
+            <div class="card-body">
+                <div id="actionLog" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);max-height:200px;overflow-y:auto">
+                    <em>Лог пуст</em>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── Конфигурация ───
+const API_URL = 'api.php';
+let csrfToken = '';
+let allData = null;
+let actionLogEntries = [];
+
+// ─── Инициализация ───
+document.addEventListener('DOMContentLoaded', async () => {
+    initTabs();
+    await fetchCsrfToken();
+    await refreshData();
+
+    // Фильтр портов
+    document.getElementById('portFilter').addEventListener('input', () => renderPorts());
+});
+
+// ─── Табы ───
+function initTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        });
+    });
+}
+
+// ─── API ───
+async function fetchCsrfToken() {
+    try {
+        const resp = await fetch(API_URL + '?action=csrf_token');
+        const data = await resp.json();
+        csrfToken = data.token || '';
+    } catch (e) {
+        console.error('CSRF fetch error:', e);
+    }
+}
+
+async function apiGet(action) {
+    const resp = await fetch(API_URL + '?action=' + action);
+    return await resp.json();
+}
+
+async function apiPost(action, params) {
+    const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, params, csrf: csrfToken }),
+    });
+    return await resp.json();
+}
+
+async function refreshData() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+
+    try {
+        allData = await apiGet('full_report');
+        if (allData.error) {
+            setStatus(false, allData.error);
+        } else {
+            setStatus(true, 'online');
+            renderAll();
+        }
+    } catch (e) {
+        setStatus(false, 'connection error');
+    }
+
+    btn.classList.remove('spinning');
+}
+
+function setStatus(ok, text) {
+    document.getElementById('statusDot').className = 'status-dot' + (ok ? '' : ' error');
+    document.getElementById('statusText').textContent = text;
+}
+
+// ─── Рендеринг ───
+function renderAll() {
+    if (!allData) return;
+    renderSystem();
+    renderInterfaces();
+    renderConnections();
+    renderPorts();
+    renderFilterRules();
+    renderNatRules();
+    renderForwardRules();
+    renderDocker();
+    renderFail2ban();
+    renderSuricata();
+}
+
+function renderSystem() {
+    const sys = allData.system || {};
+    const mem = sys.memory || {};
+    document.getElementById('hostname').textContent = sys.hostname || '?';
+
+    document.getElementById('sysMetrics').innerHTML = `
+        <div class="metric">
+            <div class="metric-label">Hostname</div>
+            <div class="metric-value">${esc(sys.hostname)}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Kernel</div>
+            <div class="metric-value">${esc(sys.kernel)}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Uptime</div>
+            <div class="metric-value">${esc(sys.uptime)}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Load</div>
+            <div class="metric-value">${esc(sys.load)}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">RAM Used</div>
+            <div class="metric-value">${esc(mem.used || '?')} / ${esc(mem.total || '?')}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Обновлено</div>
+            <div class="metric-value" style="font-size:11px">${new Date(sys.timestamp).toLocaleTimeString('ru')}</div>
+        </div>
+    `;
+}
+
+function renderInterfaces() {
+    const ifaces = allData.interfaces || [];
+    let html = '';
+    ifaces.forEach(i => {
+        const stateColor = i.state === 'UP' ? 'var(--green)' : 'var(--red)';
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span style="color:${stateColor};min-width:6ch">${esc(i.name)}</span>
+            <span style="color:var(--text-dim)">${esc(i.state)}</span>
+            <span style="color:var(--text)">${(i.addresses || []).map(a => esc(a)).join(', ')}</span>
+        </div>`;
+    });
+    document.getElementById('interfaces').innerHTML = html || '<em>Нет данных</em>';
+}
+
+function renderConnections() {
+    const conns = allData.connections || [];
+    document.getElementById('connCount').textContent = conns.length;
+    let html = '';
+    conns.forEach(c => {
+        html += `<div class="conn-row">
+            <span class="conn-local">${esc(c.local)}</span>
+            <span class="conn-arrow">→</span>
+            <span class="conn-remote">${esc(c.remote)}</span>
+        </div>`;
+    });
+    document.getElementById('connections').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-dim)">Нет соединений</div>';
+}
+
+function renderPorts() {
+    const ports = allData.ports || [];
+    const filter = (document.getElementById('portFilter').value || '').toLowerCase();
+
+    // Сортируем: сначала опасные (open на external), потом по порту
+    const sorted = [...ports].sort((a, b) => {
+        const aOpen = a.fw_status === 'open' ? 0 : 1;
+        const bOpen = b.fw_status === 'open' ? 0 : 1;
+        if (aOpen !== bOpen) return aOpen - bOpen;
+        return a.port - b.port;
+    });
+
+    let filtered = sorted;
+    if (filter) {
+        filtered = sorted.filter(p =>
+            String(p.port).includes(filter) ||
+            (p.process || '').toLowerCase().includes(filter) ||
+            (p.fw_status || '').toLowerCase().includes(filter) ||
+            (p.proto || '').includes(filter) ||
+            (p.bind || '').includes(filter)
+        );
+    }
+
+    document.getElementById('portCount').textContent = filtered.length;
+
+    let html = '';
+    filtered.forEach(p => {
+        const fwClass = 'fw-' + (p.fw_status || 'unknown');
+        let fwLabel = p.fw_status || '?';
+        let indicatorClass = 'safe';
+
+        if (p.fw_status === 'open') {
+            fwLabel = '🔓 OPEN';
+            indicatorClass = 'danger';
+        } else if (p.fw_status === 'blocked' || p.fw_status === 'blocked_by_policy') {
+            fwLabel = '🔒 blocked';
+            indicatorClass = 'safe';
+        } else if (p.fw_status === 'limited') {
+            fwLabel = '⚡ limited';
+            indicatorClass = 'warn';
+        }
+
+        html += `<tr>
+            <td><span class="port-indicator ${indicatorClass}"></span></td>
+            <td style="font-weight:600;color:var(--text-bright)">${p.port}</td>
+            <td>${p.proto || 'tcp'}</td>
+            <td style="color:${p.bind === 'all' ? 'var(--orange)' : 'var(--text-dim)'}">${p.bind}</td>
+            <td style="color:var(--text)">${esc(p.process || '—')}</td>
+            <td class="${fwClass}">${fwLabel}</td>
+        </tr>`;
+    });
+
+    document.getElementById('portTableBody').innerHTML = html;
+}
+
+function renderChainBlock(chainName, chainData) {
+    const policy = chainData.policy || '-';
+    const policyClass = policy === 'DROP' ? 'policy-drop' : 'policy-accept';
+    const rules = chainData.rules || [];
+
+    let rulesHtml = '';
+    rules.forEach(r => {
+        const targetClass = 'target-' + (r.target || '').toLowerCase();
+        const details = [
+            r.prot !== 'all' ? r.prot : '',
+            r.in !== '*' ? `in:${r.in}` : '',
+            r.out !== '*' ? `out:${r.out}` : '',
+            r.source !== '0.0.0.0/0' ? `src:${r.source}` : '',
+            r.destination !== '0.0.0.0/0' ? `dst:${r.destination}` : '',
+            r.extra || ''
+        ].filter(Boolean).join(' ');
+
+        rulesHtml += `<div class="rule-row">
+            <span class="rule-num">${r.num}</span>
+            <span class="rule-target ${targetClass}">${esc(r.target)}</span>
+            <span class="rule-details" title="${esc(details)}">${esc(details)}</span>
+            <span class="rule-pkts">${formatPkts(r.pkts)}</span>
+        </div>`;
+    });
+
+    return `<div class="chain-block">
+        <div class="chain-name">
+            <span>${esc(chainName)}</span>
+            <span class="chain-policy ${policyClass}">${policy}</span>
+        </div>
+        <div class="rules-list">${rulesHtml || '<div style="padding:10px;color:var(--text-dim);text-align:center">Нет правил</div>'}</div>
+    </div>`;
+}
+
+function renderFilterRules() {
+    const filter = (allData.iptables || {}).filter || {};
+    let html = '';
+    let acceptCount = 0, dropCount = 0;
+
+    // Показываем основные цепочки в порядке: INPUT, FORWARD, OUTPUT, остальные
+    const order = ['INPUT', 'FORWARD', 'OUTPUT'];
+    const others = Object.keys(filter).filter(k => !order.includes(k));
+
+    [...order, ...others].forEach(chain => {
+        if (filter[chain]) {
+            html += renderChainBlock(chain, filter[chain]);
+            (filter[chain].rules || []).forEach(r => {
+                if (r.target === 'ACCEPT') acceptCount++;
+                if (r.target === 'DROP' || r.target === 'REJECT') dropCount++;
+            });
+        }
+    });
+
+    document.getElementById('filterRules').innerHTML = html;
+    document.getElementById('acceptCount').textContent = acceptCount + ' ACCEPT';
+    document.getElementById('dropCount').textContent = dropCount + ' DROP';
+}
+
+function renderNatRules() {
+    const nat = (allData.iptables || {}).nat || {};
+    let html = '';
+    Object.keys(nat).forEach(chain => {
+        html += renderChainBlock(chain, nat[chain]);
+    });
+    document.getElementById('natRules').innerHTML = html || '<em>Нет NAT правил</em>';
+}
+
+function renderForwardRules() {
+    const filter = (allData.iptables || {}).filter || {};
+    const fw = filter.FORWARD;
+    if (fw) {
+        document.getElementById('forwardRules').innerHTML = renderChainBlock('FORWARD', fw);
+    } else {
+        document.getElementById('forwardRules').innerHTML = '<em>Нет FORWARD правил</em>';
+    }
+}
+
+function renderDocker() {
+    const docker = allData.docker || {};
+    const containers = docker.containers || [];
+    const networks = docker.networks || [];
+
+    document.getElementById('dockerCount').textContent = containers.length;
+
+    let cHtml = '';
+    containers.forEach(c => {
+        const isUp = (c.status || '').toLowerCase().includes('up');
+        cHtml += `<div class="container-card">
+            <div class="container-status ${isUp ? 'up' : 'down'}"></div>
+            <div class="container-info">
+                <div class="container-name">${esc(c.name)}</div>
+                <div class="container-meta">${esc(c.image)} — ${esc(c.ports || 'no ports')}</div>
+                <div class="container-meta">${esc(c.status)}</div>
+            </div>
+        </div>`;
+    });
+    document.getElementById('dockerContainers').innerHTML = cHtml || '<div style="padding:20px;text-align:center;color:var(--text-dim)">Нет контейнеров</div>';
+
+    let nHtml = '';
+    networks.forEach(n => {
+        nHtml += `<div style="display:flex;gap:10px;padding:3px 0;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span style="color:var(--accent)">${esc(n.name)}</span>
+            <span style="color:var(--text-dim)">${esc(n.driver)}</span>
+        </div>`;
+    });
+    document.getElementById('dockerNetworks').innerHTML = nHtml;
+}
+
+function renderFail2ban() {
+    const jails = allData.fail2ban || [];
+    let html = '';
+    jails.forEach(j => {
+        html += `<div class="jail-card">
+            <span class="jail-name">${esc(j.name)}</span>
+            <div class="jail-stats">
+                <span class="jail-stat" style="color:var(--red)">🚫 ${j.banned}</span>
+                <span class="jail-stat" style="color:var(--text-dim)">Σ ${j.total_banned}</span>
+            </div>
+        </div>`;
+        if (j.banned_ips && j.banned_ips.length > 0) {
+            html += `<div style="padding:4px 14px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)">
+                ${j.banned_ips.map(ip => `<span style="margin-right:8px">${esc(ip)}</span>`).join('')}
+            </div>`;
+        }
+    });
+    document.getElementById('fail2banJails').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-dim)">Fail2ban не запущен</div>';
+}
+
+function renderSuricata() {
+    const suri = allData.suricata || {};
+    const statusEl = document.getElementById('suricataStatus');
+
+    if (suri.running) {
+        statusEl.className = 'badge badge-green';
+        statusEl.textContent = 'running';
+    } else {
+        statusEl.className = 'badge badge-red';
+        statusEl.textContent = 'stopped';
+    }
+
+    const alerts = suri.recent_alerts || [];
+    let html = '';
+    alerts.forEach(a => {
+        html += `<div class="alert-line">${esc(a)}</div>`;
+    });
+    document.getElementById('suricataAlerts').innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text-dim)">Нет алертов</div>';
+}
+
+// ─── Действия ───
+async function doAction(action, params) {
+    try {
+        const result = await apiPost(action, params);
+        if (result.error) {
+            showToast(result.error, 'error');
+        } else {
+            showToast(`✓ ${action}: OK`, 'success');
+            logAction(action, params);
+            // Обновляем данные
+            setTimeout(refreshData, 500);
+        }
+    } catch (e) {
+        showToast('Ошибка: ' + e.message, 'error');
+    }
+}
+
+function logAction(action, params) {
+    const time = new Date().toLocaleTimeString('ru');
+    actionLogEntries.unshift(`[${time}] ${action} ${JSON.stringify(params)}`);
+    if (actionLogEntries.length > 50) actionLogEntries.pop();
+
+    const el = document.getElementById('actionLog');
+    el.innerHTML = actionLogEntries.map(l => `<div style="padding:2px 0;border-bottom:1px solid var(--border)">${esc(l)}</div>`).join('');
+}
+
+// ─── Утилиты ───
+function esc(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+function formatPkts(pkts) {
+    const n = parseInt(pkts);
+    if (isNaN(n)) return pkts;
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+}
+
+function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast ' + (type || '') + ' show';
+    setTimeout(() => { el.classList.remove('show'); }, 3000);
+}
+</script>
+
+</body>
+</html>

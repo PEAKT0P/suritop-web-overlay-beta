@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<email>root@localhost</email>
+	<name>suritop-web</name>
+	<description>
+		Security monitoring system for Gentoo Linux.
+		Combines Suricata IDS, ModSecurity WAF, Fail2Ban, and iptables
+		into a unified web dashboard with real-time attack map.
+	</description>
+	<upstream>
+		<remote-id type="github">denjik/suritop-web</remote-id>
+	</upstream>
+</pkgmetadata>

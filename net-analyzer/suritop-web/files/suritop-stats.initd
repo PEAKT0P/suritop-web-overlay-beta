@@ -1,0 +1,26 @@
+#!/sbin/openrc-run
+# suritop-stats — Server stats collector daemon
+
+name="suritop-stats"
+description="Server stats collector daemon (iptables, f2b, nginx, SSH)"
+
+command="/usr/bin/python3"
+command_args="/usr/libexec/suritop-web/stats_collector.py"
+command_background="yes"
+command_user="stats_collector:stats_collector"
+
+pidfile="/run/suritop-web/stats_collector.pid"
+start_stop_daemon_args="--make-pidfile --stdout /var/log/stats_collector.log --stderr /var/log/stats_collector.log"
+
+depend() {
+    need net mysql
+    after fail2ban nginx
+    keyword --timeout 60
+}
+
+start_pre() {
+	getent group suricata | grep -q stats_collector || usermod -aG suricata stats_collector 2>/dev/null
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /run/suritop-web
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /var/lib/stats_collector
+    checkpath --file --owner stats_collector:stats_collector --mode 0644 /var/log/stats_collector.log 2>/dev/null || true
+}

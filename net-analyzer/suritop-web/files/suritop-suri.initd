@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+# suritop-suri — Suricata eve.json collector for Attack Map
+
+name="suritop-suri"
+description="Suricata eve.json collector daemon"
+
+command="/usr/bin/python3"
+command_args="/usr/libexec/suritop-web/suricata_collector.py --daemon"
+command_background="true"
+
+pidfile="/run/suritop-web/suricata_collector.pid"
+start_stop_daemon_args="--make-pidfile --stdout /var/log/suricata_collector.log --stderr /var/log/suricata_collector.log"
+
+depend() {
+    need net mysql
+    after suricata
+    keyword --timeout 60
+}
+
+start_pre() {
+	getent group suricata | grep -q stats_collector || usermod -aG suricata stats_collector 2>/dev/null
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /run/suritop-web
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /var/lib/stats_collector 2>/dev/null || true
+}

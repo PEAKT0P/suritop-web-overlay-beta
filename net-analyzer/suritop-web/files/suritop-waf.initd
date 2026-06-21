@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+# suritop-waf — ModSecurity audit log collector daemon
+
+name="suritop-waf"
+description="ModSecurity audit log collector daemon"
+
+command="/usr/bin/python3"
+command_args="/usr/libexec/suritop-web/modsec_collector.py --daemon"
+command_background="yes"
+command_user="stats_collector:stats_collector"
+
+pidfile="/run/suritop-web/modsec_collector.pid"
+start_stop_daemon_args="--make-pidfile --stdout /var/log/modsec_collector.log --stderr /var/log/modsec_collector.log"
+
+depend() {
+    need net mysql
+    after nginx suritop-stats
+    keyword --timeout 60
+}
+
+start_pre() {
+	getent group suricata | grep -q stats_collector || usermod -aG suricata stats_collector 2>/dev/null
+    checkpath --directory --owner stats_collector:stats_collector --mode 0755 /run/suritop-web
+    checkpath --file --owner stats_collector:stats_collector --mode 0644 /var/log/modsec_collector.log 2>/dev/null || true
+}

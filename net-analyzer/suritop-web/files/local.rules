@@ -1,0 +1,27 @@
+# Правило 1: Обнаружение сканирования SSH (более 5 попыток за 10 секунд) и установка xbits на 300 секунд
+#alert tcp $HOME_NET any -> $EXTERNAL_NET 22 (msg:"LOCAL Possible SSH scan, setting xbits"; \
+#  flow:to_server; \
+#  threshold: type both, track by_src, count 5, seconds 10; \
+#  xbits:set, ssh_scanner, track ip_src, expire 300; \
+#  classtype:attempted-recon; sid:1000001; rev:1;)
+#
+# Правило 2: Блокировка (или предупреждение) для источников с меткой ssh_scanner
+#alert tcp $HOME_NET any -> $EXTERNAL_NET 22 (msg:"LOCAL Blocked SSH traffic from known scanner"; \
+#  xbits:isset, ssh_scanner, track ip_src; \
+#  classtype:attempted-recon; sid:1000002; rev:1;)
+
+
+# Правило 1: Ловим входящий скан (снаружи внутрь)
+alert tcp $EXTERNAL_NET any -> $HOME_NET 61122 (msg:"LOCAL Possible SSH scan, setting xbits"; \
+  flow:to_server; \
+  threshold: type both, track by_src, count 5, seconds 10; \
+  xbits:set, ssh_scanner, track ip_src, expire 300; \
+  classtype:attempted-recon; sid:1000001; rev:2;)
+
+# Правило 2: ДРОПАЕМ трафик от этого IP (обрати внимание на слово drop)
+drop tcp $EXTERNAL_NET any -> $HOME_NET 61122 (msg:"LOCAL Blocked SSH traffic from known scanner"; \
+  xbits:isset, ssh_scanner, track ip_src; \
+  classtype:attempted-recon; sid:1000002; rev:2;)
+
+
+drop http any any -> any any (msg:"LOCAL Test Suricata DROP from Windows!"; content:"GET /suricata-block-me"; sid:1000099; rev:1;)

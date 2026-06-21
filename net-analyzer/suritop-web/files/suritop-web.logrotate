@@ -1,0 +1,120 @@
+# suritop-web logrotate configuration
+
+# 1. Stats collector
+/var/log/stats_collector.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 stats_collector stats_collector
+}
+
+# 2. Suricata collector
+/var/log/suricata_collector.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 stats_collector stats_collector
+}
+
+# 3. ModSecurity collector
+/var/log/modsec_collector.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 stats_collector stats_collector
+}
+
+# 4. GeoIP fill
+/var/log/geo_fill.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 stats_collector stats_collector
+}
+
+# 5. iptables manager
+/var/log/iptables-manager.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 root root
+}
+
+# 6. Nginx (if used by suritop-web)
+/var/log/nginx/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 640 nginx root
+    sharedscripts
+    postrotate
+        /etc/init.d/nginx reload > /dev/null 2>&1 || true
+    endscript
+}
+
+# 7. ModSecurity audit log
+/var/log/modsec_audit.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 root root
+    sharedscripts
+    postrotate
+        /etc/init.d/nginx reload > /dev/null 2>&1 || true
+    endscript
+}
+
+# 8. Suricata
+/var/log/suricata/*.log /var/log/suricata/*.json {
+    daily
+    rotate 3
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 suricata suricata
+    sharedscripts
+    postrotate
+        /bin/kill -HUP $(pidof suricata) 2>/dev/null || true
+    endscript
+}
+
+# 9. Fail2Ban
+/var/log/fail2ban.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+    postrotate
+        /usr/bin/fail2ban-client flushlogs >/dev/null || true
+    endscript
+}

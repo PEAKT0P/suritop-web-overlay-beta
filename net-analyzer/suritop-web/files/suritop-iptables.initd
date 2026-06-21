@@ -1,0 +1,32 @@
+#!/sbin/openrc-run
+# suritop-iptables — iptables Manager API Daemon
+
+name="suritop-iptables"
+description="iptables Manager API Daemon (Unix socket)"
+
+command="/usr/bin/python3"
+command_args="/usr/libexec/suritop-web/iptables_api.py"
+command_background="yes"
+command_user="root:root"
+
+pidfile="/tmp/iptables-manager.pid"
+start_stop_daemon_args="--make-pidfile --stdout /var/log/iptables-manager.log --stderr /var/log/iptables-manager.log"
+
+depend() {
+    need net
+    after iptables docker
+    keyword --timeout 60
+}
+
+start_pre() {
+    checkpath --file --owner root:root --mode 0644 /var/log/iptables-manager.log 2>/dev/null || true
+    # Kill stale iptables-manager from old init.d
+    if [ -f /run/suritop-web/iptables-manager.pid ]; then
+        kill $(cat /run/suritop-web/iptables-manager.pid) 2>/dev/null
+        rm -f /run/suritop-web/iptables-manager.pid
+    fi
+}
+
+stop_post() {
+    [ -S /tmp/iptables-manager.sock ] && rm -f /tmp/iptables-manager.sock
+}
